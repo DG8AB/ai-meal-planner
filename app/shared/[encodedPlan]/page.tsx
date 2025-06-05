@@ -21,10 +21,23 @@ export default function SharedMealPlan() {
   useEffect(() => {
     try {
       const encodedPlan = params.encodedPlan as string
-      const decodedPlan = decodeURIComponent(atob(encodedPlan))
+      if (!encodedPlan) {
+        setError("No meal plan data provided")
+        return
+      }
+
+      const decodedPlan = decodeURIComponent(escape(atob(encodedPlan)))
       const parsedPlan = JSON.parse(decodedPlan)
+
+      // Validate the meal plan structure
+      if (!parsedPlan.meals || !parsedPlan.weekOf) {
+        setError("Invalid meal plan format")
+        return
+      }
+
       setMealPlan(parsedPlan)
     } catch (err) {
+      console.error("Error decoding meal plan:", err)
       setError("Invalid or corrupted meal plan link")
     }
   }, [params.encodedPlan])

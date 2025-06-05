@@ -24,14 +24,20 @@ export default function MealHistory() {
       id: Date.now().toString(),
     }
 
-    localStorage.setItem("currentMealPlan", JSON.stringify(newMealPlan))
+    try {
+      localStorage.setItem("currentMealPlan", JSON.stringify(newMealPlan))
 
-    // Add to history
-    const currentHistory = JSON.parse(localStorage.getItem("mealPlanHistory") || "[]")
-    currentHistory.unshift({ ...newMealPlan, createdAt: new Date().toISOString() })
-    localStorage.setItem("mealPlanHistory", JSON.stringify(currentHistory.slice(0, 10)))
+      // Add to history
+      const currentHistory = JSON.parse(localStorage.getItem("mealPlanHistory") || "[]")
+      currentHistory.unshift({ ...newMealPlan, createdAt: new Date().toISOString() })
+      localStorage.setItem("mealPlanHistory", JSON.stringify(currentHistory.slice(0, 10)))
 
-    window.location.reload() // Simple way to refresh the app state
+      // Force page reload to update state
+      window.location.href = "/?tab=current"
+    } catch (error) {
+      console.error("Error reusing meal plan:", error)
+      window.location.reload()
+    }
   }
 
   const deleteMealPlan = (index: number) => {

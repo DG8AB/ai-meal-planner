@@ -3,9 +3,15 @@ import { encryptMealPlan } from "./encryption-utils"
 
 // Generate a shareable link for a meal plan
 export function generateShareableLink(mealPlan: MealPlan): string {
-  const encodedPlan = btoa(encodeURIComponent(JSON.stringify(mealPlan)))
-  const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
-  return `${baseUrl}/shared/${encodedPlan}`
+  try {
+    const jsonString = JSON.stringify(mealPlan)
+    const encodedPlan = btoa(unescape(encodeURIComponent(jsonString)))
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
+    return `${baseUrl}/shared/${encodedPlan}`
+  } catch (error) {
+    console.error("Error generating shareable link:", error)
+    return ""
+  }
 }
 
 // Export meal plan as encrypted .mp file

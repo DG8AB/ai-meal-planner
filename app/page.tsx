@@ -25,30 +25,50 @@ export default function MealPlanningAssistant() {
 
   useEffect(() => {
     // Load saved preferences and current meal plan
-    const savedPreferences = localStorage.getItem("mealPlanPreferences")
-    const savedMealPlan = localStorage.getItem("currentMealPlan")
+    try {
+      const savedPreferences = localStorage.getItem("mealPlanPreferences")
+      const savedMealPlan = localStorage.getItem("currentMealPlan")
 
-    if (savedPreferences) {
-      setPreferences(JSON.parse(savedPreferences))
-    }
-    if (savedMealPlan) {
-      setCurrentMealPlan(JSON.parse(savedMealPlan))
+      if (savedPreferences) {
+        const parsedPreferences = JSON.parse(savedPreferences)
+        setPreferences(parsedPreferences)
+      }
+      if (savedMealPlan) {
+        const parsedMealPlan = JSON.parse(savedMealPlan)
+        setCurrentMealPlan(parsedMealPlan)
+      }
+    } catch (error) {
+      console.error("Error loading saved data:", error)
+      // Clear corrupted data
+      localStorage.removeItem("mealPlanPreferences")
+      localStorage.removeItem("currentMealPlan")
     }
   }, [])
 
   const handleMealPlanGenerated = (mealPlan: MealPlan) => {
-    setCurrentMealPlan(mealPlan)
-    localStorage.setItem("currentMealPlan", JSON.stringify(mealPlan))
+    try {
+      setCurrentMealPlan(mealPlan)
+      localStorage.setItem("currentMealPlan", JSON.stringify(mealPlan))
 
-    // Save to history
-    const history = JSON.parse(localStorage.getItem("mealPlanHistory") || "[]")
-    history.unshift({ ...mealPlan, createdAt: new Date().toISOString() })
-    localStorage.setItem("mealPlanHistory", JSON.stringify(history.slice(0, 10))) // Keep last 10
+      // Save to history
+      const history = JSON.parse(localStorage.getItem("mealPlanHistory") || "[]")
+      history.unshift({ ...mealPlan, createdAt: new Date().toISOString() })
+      localStorage.setItem("mealPlanHistory", JSON.stringify(history.slice(0, 10))) // Keep last 10
+
+      // Auto-switch to current plan tab
+      setActiveTab("current")
+    } catch (error) {
+      console.error("Error saving meal plan:", error)
+    }
   }
 
   const handlePreferencesUpdate = (newPreferences: DietaryPreferences) => {
-    setPreferences(newPreferences)
-    localStorage.setItem("mealPlanPreferences", JSON.stringify(newPreferences))
+    try {
+      setPreferences(newPreferences)
+      localStorage.setItem("mealPlanPreferences", JSON.stringify(newPreferences))
+    } catch (error) {
+      console.error("Error saving preferences:", error)
+    }
   }
 
   return (
