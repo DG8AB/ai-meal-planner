@@ -3,7 +3,7 @@ import { encryptMealPlan } from "./encryption-utils"
 
 // Generate a shareable link for a meal plan
 export function generateShareableLink(mealPlan: MealPlan): string {
-  const encodedPlan = btoa(JSON.stringify(mealPlan))
+  const encodedPlan = btoa(encodeURIComponent(JSON.stringify(mealPlan)))
   const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
   return `${baseUrl}/shared/${encodedPlan}`
 }

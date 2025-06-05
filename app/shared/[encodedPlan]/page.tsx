@@ -21,7 +21,7 @@ export default function SharedMealPlan() {
   useEffect(() => {
     try {
       const encodedPlan = params.encodedPlan as string
-      const decodedPlan = atob(encodedPlan)
+      const decodedPlan = decodeURIComponent(atob(encodedPlan))
       const parsedPlan = JSON.parse(decodedPlan)
       setMealPlan(parsedPlan)
     } catch (err) {
