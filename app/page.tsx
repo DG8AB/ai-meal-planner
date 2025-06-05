@@ -66,7 +66,7 @@ export default function MealPlanningAssistant() {
         </header>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 mb-8">
+          <TabsList className="grid w-full grid-cols-1 md:grid-cols-5 mb-8">
             <TabsTrigger value="planner" className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
               Plan Meals
