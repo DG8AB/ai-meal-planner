@@ -4,20 +4,31 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { History, Calendar, RotateCcw, Trash2 } from "lucide-react"
+import { History, Calendar, RotateCcw, Trash2, Loader2 } from "lucide-react"
 import type { MealPlan } from "@/types/meal-planning"
+import { getMealPlanHistory, deleteMealPlan, saveMealPlan } from "@/lib/supabase"
 
 export default function MealHistory() {
   const [history, setHistory] = useState<(MealPlan & { createdAt: string })[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const savedHistory = localStorage.getItem("mealPlanHistory")
-    if (savedHistory) {
-      setHistory(JSON.parse(savedHistory))
+    async function loadHistory() {
+      setIsLoading(true)
+      try {
+        const historyData = await getMealPlanHistory()
+        setHistory(historyData)
+      } catch (error) {
+        console.error("Error loading meal plan history:", error)
+      } finally {
+        setIsLoading(false)
+      }
     }
+
+    loadHistory()
   }, [])
 
-  const reuseMealPlan = (mealPlan: MealPlan) => {
+  const reuseMealPlan = async (mealPlan: MealPlan) => {
     const newMealPlan = {
       ...mealPlan,
       weekOf: new Date().toISOString(),
@@ -25,14 +36,8 @@ export default function MealHistory() {
     }
 
     try {
-      localStorage.setItem("currentMealPlan", JSON.stringify(newMealPlan))
-
-      // Add to history
-      const currentHistory = JSON.parse(localStorage.getItem("mealPlanHistory") || "[]")
-      currentHistory.unshift({ ...newMealPlan, createdAt: new Date().toISOString() })
-      localStorage.setItem("mealPlanHistory", JSON.stringify(currentHistory.slice(0, 10)))
-
-      // Force page reload to update state
+      await saveMealPlan(newMealPlan)
+      // Redirect to current plan tab
       window.location.href = "/?tab=current"
     } catch (error) {
       console.error("Error reusing meal plan:", error)
@@ -40,15 +45,36 @@ export default function MealHistory() {
     }
   }
 
-  const deleteMealPlan = (index: number) => {
-    const newHistory = history.filter((_, i) => i !== index)
-    setHistory(newHistory)
-    localStorage.setItem("mealPlanHistory", JSON.stringify(newHistory))
+  const handleDeleteMealPlan = async (id: string, index: number) => {
+    try {
+      await deleteMealPlan(id)
+      // Update local state
+      const newHistory = history.filter((_, i) => i !== index)
+      setHistory(newHistory)
+    } catch (error) {
+      console.error("Error deleting meal plan:", error)
+    }
   }
 
-  const clearHistory = () => {
-    setHistory([])
-    localStorage.removeItem("mealPlanHistory")
+  const clearHistory = async () => {
+    try {
+      // Delete all meal plans in history
+      await Promise.all(history.map((plan) => deleteMealPlan(plan.id)))
+      setHistory([])
+    } catch (error) {
+      console.error("Error clearing history:", error)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="text-center py-12">
+          <Loader2 className="h-16 w-16 text-gray-400 mx-auto mb-4 animate-spin" />
+          <h3 className="text-xl font-semibold text-gray-600 mb-2">Loading History...</h3>
+        </CardContent>
+      </Card>
+    )
   }
 
   if (history.length === 0) {
@@ -100,7 +126,7 @@ export default function MealHistory() {
                     <RotateCcw className="h-4 w-4 mr-2" />
                     Reuse Plan
                   </Button>
-                  <Button onClick={() => deleteMealPlan(index)} variant="ghost" size="sm">
+                  <Button onClick={() => handleDeleteMealPlan(mealPlan.id, index)} variant="ghost" size="sm">
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>

@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { Settings, Save, X } from "lucide-react"
+import { Settings, Save, X, Loader2 } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
 import type { DietaryPreferences } from "@/types/meal-planning"
 
 interface PreferencesSettingsProps {
@@ -38,9 +39,27 @@ const BUDGET_RANGES = [
 export default function PreferencesSettings({ preferences, onPreferencesUpdate }: PreferencesSettingsProps) {
   const [localPreferences, setLocalPreferences] = useState<DietaryPreferences>(preferences)
   const [newDislike, setNewDislike] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
+  const { toast } = useToast()
 
-  const handleSave = () => {
-    onPreferencesUpdate(localPreferences)
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      await onPreferencesUpdate(localPreferences)
+      toast({
+        title: "Preferences saved",
+        description: "Your dietary preferences have been updated successfully.",
+      })
+    } catch (error) {
+      console.error("Error saving preferences:", error)
+      toast({
+        title: "Error saving preferences",
+        description: "Please try again later.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const toggleAllergy = (allergy: string) => {
@@ -205,9 +224,18 @@ export default function PreferencesSettings({ preferences, onPreferencesUpdate }
       </Card>
 
       <div className="text-center">
-        <Button onClick={handleSave} size="lg" className="bg-green-600 hover:bg-green-700">
-          <Save className="mr-2 h-4 w-4" />
-          Save Preferences
+        <Button onClick={handleSave} size="lg" className="bg-green-600 hover:bg-green-700" disabled={isSaving}>
+          {isSaving ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              Save Preferences
+            </>
+          )}
         </Button>
       </div>
     </div>

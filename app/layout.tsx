@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
+import { Toaster } from "@/components/toaster"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -66,7 +67,7 @@ export const metadata: Metadata = {
   },
   manifest: "/site.webmanifest",
   themeColor: "#ea580c",
-    generator: 'v0.dev'
+  generator: "v0.dev",
 }
 
 export default function RootLayout({
@@ -96,7 +97,10 @@ export default function RootLayout({
         <link rel="mask-icon" href="/safari-pinned-tab.png" color="#ea580c" />
         <link rel="manifest" href="/site.webmanifest" />
       </head>
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        {children}
+        <Toaster />
+      </body>
     </html>
   )
 }
