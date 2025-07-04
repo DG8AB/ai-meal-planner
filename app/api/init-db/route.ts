@@ -1,12 +1,19 @@
 import { NextResponse } from "next/server"
-import { initDatabase } from "@/lib/database"
+import { ensureSchema } from "@/lib/edgedb-server"
 
+/**
+ * Warm-up endpoint called from the browser once per session.
+ * It simply makes sure the EdgeDB schema exists.
+ */
 export async function GET() {
   try {
-    await initDatabase()
-    return NextResponse.json({ success: true, message: "Database initialized successfully" })
+    await ensureSchema()
+    return NextResponse.json({
+      success: true,
+      message: "EdgeDB is ready",
+    })
   } catch (error) {
-    console.error("Database initialization error:", error)
-    return NextResponse.json({ success: false, error: "Failed to initialize database" }, { status: 500 })
+    console.error("EdgeDB init error:", error)
+    return NextResponse.json({ success: false, error: "EdgeDB init failed", details: String(error) }, { status: 500 })
   }
 }

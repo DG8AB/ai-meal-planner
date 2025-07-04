@@ -35,7 +35,7 @@ export default function MealHistory({ onMealPlanRestore }: MealHistoryProps) {
   }, [])
 
   const reuseMealPlan = async (historyItem: any) => {
-    const mealPlan = historyItem.meal_plan
+    const mealPlan = JSON.parse(historyItem.meal_plan)
     const newMealPlan = {
       ...mealPlan,
       weekOf: new Date().toISOString(),
@@ -52,7 +52,7 @@ export default function MealHistory({ onMealPlanRestore }: MealHistoryProps) {
 
   const handleDeleteMealPlan = async (id: string, index: number) => {
     try {
-      await deleteMealPlan(id.toString())
+      await deleteMealPlan(id)
       // Update local state
       const newHistory = history.filter((_, i) => i !== index)
       setHistory(newHistory)
@@ -64,7 +64,7 @@ export default function MealHistory({ onMealPlanRestore }: MealHistoryProps) {
   const clearHistory = async () => {
     try {
       // Delete all meal plans in history
-      await Promise.all(history.map((plan) => deleteMealPlan(plan.id.toString())))
+      await Promise.all(history.map((plan) => deleteMealPlan(plan.id)))
       setHistory([])
     } catch (error) {
       console.error("Error clearing history:", error)
@@ -116,7 +116,7 @@ export default function MealHistory({ onMealPlanRestore }: MealHistoryProps) {
 
       <div className="grid gap-4">
         {history.map((historyItem, index) => {
-          const mealPlan = historyItem.meal_plan
+          const mealPlan = JSON.parse(historyItem.meal_plan)
           const weekStart = new Date(mealPlan.weekOf)
           const weekEnd = new Date(weekStart)
           weekEnd.setDate(weekStart.getDate() + 6)
