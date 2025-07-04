@@ -4,14 +4,15 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, ChefHat, ShoppingCart, Settings, History, Plus, Loader2 } from "lucide-react"
+import { Calendar, ChefHat, ShoppingCart, Settings, History, Plus, Loader2, User, AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import MealPlanGenerator from "@/components/meal-plan-generator"
 import MealPlanView from "@/components/meal-plan-view"
 import ShoppingList from "@/components/shopping-list"
 import MealHistory from "@/components/meal-history"
 import PreferencesSettings from "@/components/preferences-settings"
 import type { MealPlan, DietaryPreferences } from "@/types/meal-planning"
-import { getCurrentMealPlan, getPreferences, saveMealPlan, savePreferences } from "@/lib/supabase"
+import { getCurrentMealPlan, getPreferences, saveMealPlan, savePreferences } from "@/lib/database"
 
 export default function MealPlanningAssistant() {
   const [currentMealPlan, setCurrentMealPlan] = useState<MealPlan | null>(null)
@@ -24,6 +25,7 @@ export default function MealPlanningAssistant() {
   })
   const [activeTab, setActiveTab] = useState("planner")
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // Get URL params to handle tab navigation
   useEffect(() => {
@@ -37,26 +39,36 @@ export default function MealPlanningAssistant() {
   // Update URL when tab changes
   const handleTabChange = (value: string) => {
     setActiveTab(value)
-    window.history.replaceState(null, "", `?tab=${value}`)
+    const newUrl = new URL(window.location.href)
+    newUrl.searchParams.set("tab", value)
+    window.history.replaceState(null, "", newUrl.toString())
   }
 
   useEffect(() => {
     async function loadData() {
       setIsLoading(true)
+      setError(null)
+
       try {
-        // Load preferences from DB or localStorage
+        // Initialize database first
+        await fetch("/api/init-db")
+
+        // Load preferences from database
         const savedPreferences = await getPreferences()
         if (savedPreferences) {
           setPreferences(savedPreferences)
         }
 
-        // Load current meal plan from DB or localStorage
+        // Load current meal plan from database
         const savedMealPlan = await getCurrentMealPlan()
         if (savedMealPlan) {
-          setCurrentMealPlan(savedMealPlan)
+          // Convert database format to app format if needed
+          const mealPlan = savedMealPlan.meal_plan || savedMealPlan
+          setCurrentMealPlan(mealPlan)
         }
       } catch (error) {
-        console.error("Error loading saved data:", error)
+        console.error("Error loading data from database:", error)
+        setError("Unable to connect to the database. Please check your internet connection and try again.")
       } finally {
         setIsLoading(false)
       }
@@ -67,22 +79,43 @@ export default function MealPlanningAssistant() {
 
   const handleMealPlanGenerated = async (mealPlan: MealPlan) => {
     try {
+      console.log("Saving new meal plan:", mealPlan)
       setCurrentMealPlan(mealPlan)
-      await saveMealPlan(mealPlan)
+
+      // Save to database
+      const result = await saveMealPlan(mealPlan)
+      if (result.error) {
+        console.error("Error saving to database:", result.error)
+        setError("Failed to save meal plan to database. Your meal plan is still available in this session.")
+      } else {
+        console.log("Meal plan saved successfully to database")
+        setError(null)
+      }
 
       // Auto-switch to current plan tab
       handleTabChange("current")
     } catch (error) {
       console.error("Error saving meal plan:", error)
+      setError("Failed to save meal plan. Your meal plan is still available in this session.")
     }
   }
 
   const handlePreferencesUpdate = async (newPreferences: DietaryPreferences) => {
     try {
+      console.log("Saving preferences:", newPreferences)
       setPreferences(newPreferences)
-      await savePreferences(newPreferences)
+
+      const result = await savePreferences(newPreferences)
+      if (result.error) {
+        console.error("Error saving preferences:", result.error)
+        setError("Failed to save preferences to database.")
+      } else {
+        console.log("Preferences saved successfully")
+        setError(null)
+      }
     } catch (error) {
       console.error("Error saving preferences:", error)
+      setError("Failed to save preferences.")
     }
   }
 
@@ -92,6 +125,7 @@ export default function MealPlanningAssistant() {
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-orange-600 mx-auto mb-4" />
           <p className="text-lg text-gray-700">Loading your meal plans...</p>
+          <p className="text-sm text-gray-500 mt-2">Created by dg8ab</p>
         </div>
       </div>
     )
@@ -109,7 +143,18 @@ export default function MealPlanningAssistant() {
             Your intelligent family meal planning assistant. Get personalized meal suggestions, organized weekly plans,
             and automated shopping lists.
           </p>
+          <div className="flex items-center justify-center gap-2 mt-4">
+            <User className="h-4 w-4 text-gray-500" />
+            <p className="text-sm text-gray-500">Created by dg8ab</p>
+          </div>
         </header>
+
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
           <div className="bg-white rounded-lg shadow-sm mb-6 p-1">
@@ -142,7 +187,7 @@ export default function MealPlanningAssistant() {
               <CardHeader>
                 <CardTitle>Generate New Meal Plan</CardTitle>
                 <CardDescription>
-                  Create a personalized 7-day meal plan based on your preferences and available ingredients
+                  Create a personalized 7-day meal plan starting from today and going to the same day next week
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -171,7 +216,7 @@ export default function MealPlanningAssistant() {
           </TabsContent>
 
           <TabsContent value="history">
-            <MealHistory />
+            <MealHistory onMealPlanRestore={handleMealPlanGenerated} />
           </TabsContent>
 
           <TabsContent value="settings">

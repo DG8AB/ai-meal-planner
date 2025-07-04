@@ -1,221 +1,147 @@
-import { createClient } from "@supabase/supabase-js"
-import type { MealPlan, DietaryPreferences } from "@/types/meal-planning"
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
-// Create a single supabase client for interacting with your database
-const supabaseUrl = "https://your-project-url.supabase.co"
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY || ""
+/* ─────────────────────────────────────────────────────────────────────────────
+   CONFIG & EARLY VALIDATION
+   ─────────────────────────────────────────────────────────────────────────── */
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-// User management
-export async function getCurrentUser() {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  return user
+if (!supabaseUrl || !supabaseAnonKey) {
+  // Surface a clear error immediately – this is the real reason “fetch” fails.
+  throw new Error(
+    "Supabase environment variables are missing. " +
+      "Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to your Vercel project.",
+  )
 }
 
-export async function signIn(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
-  return { data, error }
-}
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey)
 
-export async function signUp(email: string, password: string) {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-  })
-  return { data, error }
-}
+export const getCurrentMealPlan = async (userId = "anonymous") => {
+  try {
+    const { data, error } = await supabase
+      .from("meal_plans")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("current", true)
+      .maybeSingle()
 
-export async function signOut() {
-  const { error } = await supabase.auth.signOut()
-  return { error }
-}
-
-// Meal plan management
-export async function saveMealPlan(mealPlan: MealPlan) {
-  const user = await getCurrentUser()
-  if (!user) return { error: new Error("User not authenticated") }
-
-  const { data, error } = await supabase
-    .from("meal_plans")
-    .upsert({
-      id: mealPlan.id,
-      user_id: user.id,
-      week_of: mealPlan.weekOf,
-      meal_times: mealPlan.mealTimes,
-      meals: mealPlan.meals,
-      created_at: new Date().toISOString(),
-    })
-    .select()
-
-  // Also save to localStorage as backup
-  if (!error) {
-    try {
-      localStorage.setItem("currentMealPlan", JSON.stringify(mealPlan))
-    } catch (e) {
-      console.error("Failed to save to localStorage:", e)
+    if (error) {
+      throw error
     }
-  }
 
-  return { data, error }
+    return data
+  } catch (err) {
+    console.error("Error fetching current meal plan:", err)
+    throw err
+  }
 }
 
-export async function getCurrentMealPlan() {
-  const user = await getCurrentUser()
+export const getMealPlanHistory = async (userId = "anonymous") => {
+  try {
+    const { data, error } = await supabase
+      .from("meal_plans")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
 
-  if (!user) {
-    // Fall back to localStorage if not authenticated
-    try {
-      const localPlan = localStorage.getItem("currentMealPlan")
-      return localPlan ? JSON.parse(localPlan) : null
-    } catch (e) {
-      console.error("Failed to get from localStorage:", e)
+    if (error) {
+      throw error
+    }
+
+    return data || []
+  } catch (err) {
+    console.error("Error fetching meal plan history:", err)
+    throw err
+  }
+}
+
+export const saveMealPlan = async (mealPlan: any, userId = "anonymous") => {
+  try {
+    // First, mark all existing plans as not current
+    await supabase.from("meal_plans").update({ current: false }).eq("user_id", userId)
+
+    // Then insert the new plan as current
+    const { data, error } = await supabase
+      .from("meal_plans")
+      .insert([
+        {
+          user_id: userId,
+          meal_plan: mealPlan,
+          current: true,
+          week_of: mealPlan.weekOf,
+          meal_times: mealPlan.mealTimes,
+          created_at: new Date().toISOString(),
+        },
+      ])
+      .select()
+
+    if (error) {
+      throw error
+    }
+
+    console.log("Meal plan saved successfully to Supabase")
+    return { data, error: null }
+  } catch (err) {
+    console.error("Error saving meal plan:", err)
+    return { error: err }
+  }
+}
+
+export const deleteMealPlan = async (id: string) => {
+  try {
+    const { data, error } = await supabase.from("meal_plans").delete().eq("id", id)
+
+    if (error) {
+      throw error
+    }
+
+    return data
+  } catch (err) {
+    console.error("Error deleting meal plan:", err)
+    throw err
+  }
+}
+
+export const savePreferences = async (preferences: any, userId = "anonymous") => {
+  try {
+    const { data, error } = await supabase
+      .from("preferences")
+      .upsert(
+        {
+          user_id: userId,
+          preferences: preferences,
+        },
+        { onConflict: "user_id" },
+      )
+      .select()
+
+    if (error) {
+      throw error
+    }
+
+    console.log("Preferences saved successfully to Supabase")
+    return { data, error: null }
+  } catch (err) {
+    console.error("Error saving preferences:", err)
+    return { error: err }
+  }
+}
+
+// Return `null` gracefully when there’s a network problem so the UI keeps working
+export const getPreferences = async (userId = "anonymous") => {
+  try {
+    const { data, error } = await supabase.from("preferences").select("*").eq("user_id", userId).maybeSingle()
+
+    if (error) {
+      // PostgREST code 116 = "row not found" – benign; any other error is logged
+      if (error.code !== "PGRST116") console.warn("Supabase error in getPreferences:", error)
       return null
     }
-  }
 
-  const { data, error } = await supabase
-    .from("meal_plans")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single()
-
-  if (error || !data) {
-    // Fall back to localStorage if DB fetch fails
-    try {
-      const localPlan = localStorage.getItem("currentMealPlan")
-      return localPlan ? JSON.parse(localPlan) : null
-    } catch (e) {
-      console.error("Failed to get from localStorage:", e)
-      return null
-    }
-  }
-
-  return data
-}
-
-export async function getMealPlanHistory() {
-  const user = await getCurrentUser()
-
-  if (!user) {
-    // Fall back to localStorage if not authenticated
-    try {
-      const localHistory = localStorage.getItem("mealPlanHistory")
-      return localHistory ? JSON.parse(localHistory) : []
-    } catch (e) {
-      console.error("Failed to get from localStorage:", e)
-      return []
-    }
-  }
-
-  const { data, error } = await supabase
-    .from("meal_plans")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(10)
-
-  if (error || !data) {
-    // Fall back to localStorage if DB fetch fails
-    try {
-      const localHistory = localStorage.getItem("mealPlanHistory")
-      return localHistory ? JSON.parse(localHistory) : []
-    } catch (e) {
-      console.error("Failed to get from localStorage:", e)
-      return []
-    }
-  }
-
-  return data
-}
-
-export async function deleteMealPlan(id: string) {
-  const user = await getCurrentUser()
-  if (!user) return { error: new Error("User not authenticated") }
-
-  const { data, error } = await supabase.from("meal_plans").delete().eq("id", id).eq("user_id", user.id)
-
-  return { data, error }
-}
-
-// Preferences management
-export async function savePreferences(preferences: DietaryPreferences) {
-  const user = await getCurrentUser()
-  if (!user) {
-    // Save to localStorage if not authenticated
-    try {
-      localStorage.setItem("mealPlanPreferences", JSON.stringify(preferences))
-      return { data: preferences, error: null }
-    } catch (e) {
-      console.error("Failed to save to localStorage:", e)
-      return { data: null, error: e }
-    }
-  }
-
-  const { data, error } = await supabase
-    .from("user_preferences")
-    .upsert({
-      user_id: user.id,
-      diet_type: preferences.dietType,
-      allergies: preferences.allergies,
-      dislikes: preferences.dislikes,
-      serving_size: preferences.servingSize,
-      budget_range: preferences.budgetRange,
-    })
-    .select()
-
-  // Also save to localStorage as backup
-  if (!error) {
-    try {
-      localStorage.setItem("mealPlanPreferences", JSON.stringify(preferences))
-    } catch (e) {
-      console.error("Failed to save to localStorage:", e)
-    }
-  }
-
-  return { data, error }
-}
-
-export async function getPreferences() {
-  const user = await getCurrentUser()
-
-  if (!user) {
-    // Fall back to localStorage if not authenticated
-    try {
-      const localPrefs = localStorage.getItem("mealPlanPreferences")
-      return localPrefs ? JSON.parse(localPrefs) : null
-    } catch (e) {
-      console.error("Failed to get from localStorage:", e)
-      return null
-    }
-  }
-
-  const { data, error } = await supabase.from("user_preferences").select("*").eq("user_id", user.id).single()
-
-  if (error || !data) {
-    // Fall back to localStorage if DB fetch fails
-    try {
-      const localPrefs = localStorage.getItem("mealPlanPreferences")
-      return localPrefs ? JSON.parse(localPrefs) : null
-    } catch (e) {
-      console.error("Failed to get from localStorage:", e)
-      return null
-    }
-  }
-
-  // Convert from DB format to app format
-  return {
-    dietType: data.diet_type,
-    allergies: data.allergies,
-    dislikes: data.dislikes,
-    servingSize: data.serving_size,
-    budgetRange: data.budget_range,
+    return data?.preferences ?? null
+  } catch (err) {
+    console.warn("Network/Fetch error in getPreferences – continuing in degraded mode:", err)
+    return null
   }
 }

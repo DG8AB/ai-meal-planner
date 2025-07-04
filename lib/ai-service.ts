@@ -1,5 +1,12 @@
 import type { MealPlan, MealPlanRequest, Meal } from "@/types/meal-planning"
 import { generateMealTimes } from "./encryption-utils"
+import { getSmartWeekRange, getWeekDaysFromToday, formatDateRange } from "./date-utils"
+
+// -----------------------------------------------------------------------------
+// TEMPORARY SWITCH: Disable external Puter AI calls while permission errors
+// persist.  When you regain API access, just set AI_ENABLED back to true.
+// -----------------------------------------------------------------------------
+const AI_ENABLED = false
 
 // Declare puter as a global variable
 declare global {
@@ -96,9 +103,29 @@ async function callPuterAI(prompt: string | any[], options = {}) {
 }
 
 export async function generateMealPlan(request: MealPlanRequest): Promise<MealPlan> {
+  // Shortcut: if we deliberately disabled AI (or want to skip when in prod
+  // without a key), jump straight to the fallback generator.
+  if (!AI_ENABLED) {
+    return generateIntelligentMealPlan(request)
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // ORIGINAL LOGIC BELOW (unchanged) ……
+  // ────────────────────────────────────────────────────────────────────────────
+
   const mealTimes = generateMealTimes()
+  const weekRange = getSmartWeekRange()
+  const weekDays = getWeekDaysFromToday()
+  const dateRange = formatDateRange(weekRange.startDate, weekRange.endDate)
+
+  console.log("Generating meal plan for week:", dateRange)
+  console.log("Days order:", weekDays)
 
   const prompt = `You are a professional nutritionist and meal planning expert. Create a detailed 7-day meal plan as a JSON object.
+
+IMPORTANT: This meal plan is for the week starting TODAY (${weekRange.startDate.toLocaleDateString()}) and ending on ${weekRange.endDate.toLocaleDateString()}.
+
+The days should be in this EXACT order: ${weekDays.join(", ")}
 
 Requirements:
 - Diet Type: ${request.preferences.dietType}
@@ -117,14 +144,14 @@ Meal Times:
 Return ONLY a valid JSON object with this exact structure (no markdown formatting):
 {
   "id": "${Date.now()}",
-  "weekOf": "${new Date().toISOString()}",
+  "weekOf": "${weekRange.startDate.toISOString()}",
   "mealTimes": {
     "breakfast": "${mealTimes.breakfast}",
     "lunch": "${mealTimes.lunch}",
     "dinner": "${mealTimes.dinner}"
   },
   "meals": {
-    "Monday": {
+    "${weekDays[0]}": {
       "breakfast": {
         "name": "Healthy Breakfast Name",
         "description": "Brief appetizing description",
@@ -156,32 +183,32 @@ Return ONLY a valid JSON object with this exact structure (no markdown formattin
         "mealPrepTips": "Helpful preparation tip"
       }
     },
-    "Tuesday": {
+    "${weekDays[1]}": {
       "breakfast": { /* similar structure */ },
       "lunch": { /* similar structure */ },
       "dinner": { /* similar structure */ }
     },
-    "Wednesday": {
+    "${weekDays[2]}": {
       "breakfast": { /* similar structure */ },
       "lunch": { /* similar structure */ },
       "dinner": { /* similar structure */ }
     },
-    "Thursday": {
+    "${weekDays[3]}": {
       "breakfast": { /* similar structure */ },
       "lunch": { /* similar structure */ },
       "dinner": { /* similar structure */ }
     },
-    "Friday": {
+    "${weekDays[4]}": {
       "breakfast": { /* similar structure */ },
       "lunch": { /* similar structure */ },
       "dinner": { /* similar structure */ }
     },
-    "Saturday": {
+    "${weekDays[5]}": {
       "breakfast": { /* similar structure */ },
       "lunch": { /* similar structure */ },
       "dinner": { /* similar structure */ }
     },
-    "Sunday": {
+    "${weekDays[6]}": {
       "breakfast": { /* similar structure */ },
       "lunch": { /* similar structure */ },
       "dinner": { /* similar structure */ }
@@ -191,12 +218,14 @@ Return ONLY a valid JSON object with this exact structure (no markdown formattin
 
 Make sure to:
 - Include all 7 days with complete breakfast, lunch, and dinner for each day
+- Use the EXACT day names provided: ${weekDays.join(", ")}
 - Make meals varied and interesting throughout the week
 - Respect all dietary restrictions and preferences
 - Include specific quantities in ingredients
 - Provide clear, actionable cooking instructions
 - Make meals nutritionally balanced and appropriate for the diet type
-- Use available ingredients when possible`
+- Use available ingredients when possible
+- Consider the current season and time of year for ingredient availability`
 
   try {
     console.log("Generating meal plan with Puter AI...")
@@ -260,10 +289,10 @@ Make sure to:
       mealPlan.mealTimes = mealTimes
     }
 
-    const requiredDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    // Validate that all required days are present
     const requiredMeals = ["breakfast", "lunch", "dinner"]
 
-    for (const day of requiredDays) {
+    for (const day of weekDays) {
       if (!mealPlan.meals[day]) {
         throw new Error(`Missing day: ${day}`)
       }
@@ -280,7 +309,7 @@ Make sure to:
     console.error("Error generating meal plan with AI:", error)
     console.log("Falling back to intelligent meal plan...")
 
-    // Return intelligent fallback meal plan
+    // Return intelligent fallback meal plan with smart dates
     return generateIntelligentMealPlan(request)
   }
 }
@@ -374,14 +403,15 @@ Return ONLY a valid JSON array with 3 meal objects (no markdown formatting):
 }
 
 function generateIntelligentMealPlan(request: MealPlanRequest): MealPlan {
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+  const weekDays = getWeekDaysFromToday()
+  const weekRange = getSmartWeekRange()
   const meals: any = {}
   const mealTimes = generateMealTimes()
 
   // Create meal database based on dietary preferences
   const mealDatabase = createMealDatabase(request.preferences)
 
-  days.forEach((day, dayIndex) => {
+  weekDays.forEach((day, dayIndex) => {
     meals[day] = {
       breakfast: selectMeal(mealDatabase.breakfast, dayIndex, request),
       lunch: selectMeal(mealDatabase.lunch, dayIndex, request),
@@ -391,7 +421,7 @@ function generateIntelligentMealPlan(request: MealPlanRequest): MealPlan {
 
   return {
     id: Date.now().toString(),
-    weekOf: new Date().toISOString(),
+    weekOf: weekRange.startDate.toISOString(),
     mealTimes,
     meals,
   }

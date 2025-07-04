@@ -4,12 +4,17 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { History, Calendar, RotateCcw, Trash2, Loader2 } from "lucide-react"
+import { History, Calendar, RotateCcw, Trash2, Loader2, Clock } from "lucide-react"
 import type { MealPlan } from "@/types/meal-planning"
-import { getMealPlanHistory, deleteMealPlan, saveMealPlan } from "@/lib/supabase"
+import { getMealPlanHistory, deleteMealPlan } from "@/lib/database"
+import { isCurrentWeek, getDaysUntilExpiry, formatDateRange } from "@/lib/date-utils"
 
-export default function MealHistory() {
-  const [history, setHistory] = useState<(MealPlan & { createdAt: string })[]>([])
+interface MealHistoryProps {
+  onMealPlanRestore: (mealPlan: MealPlan) => void
+}
+
+export default function MealHistory({ onMealPlanRestore }: MealHistoryProps) {
+  const [history, setHistory] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -17,6 +22,7 @@ export default function MealHistory() {
       setIsLoading(true)
       try {
         const historyData = await getMealPlanHistory()
+        console.log("Loaded history data:", historyData)
         setHistory(historyData)
       } catch (error) {
         console.error("Error loading meal plan history:", error)
@@ -28,7 +34,8 @@ export default function MealHistory() {
     loadHistory()
   }, [])
 
-  const reuseMealPlan = async (mealPlan: MealPlan) => {
+  const reuseMealPlan = async (historyItem: any) => {
+    const mealPlan = historyItem.meal_plan
     const newMealPlan = {
       ...mealPlan,
       weekOf: new Date().toISOString(),
@@ -36,18 +43,16 @@ export default function MealHistory() {
     }
 
     try {
-      await saveMealPlan(newMealPlan)
-      // Redirect to current plan tab
-      window.location.href = "/?tab=current"
+      console.log("Reusing meal plan:", newMealPlan)
+      await onMealPlanRestore(newMealPlan)
     } catch (error) {
       console.error("Error reusing meal plan:", error)
-      window.location.reload()
     }
   }
 
   const handleDeleteMealPlan = async (id: string, index: number) => {
     try {
-      await deleteMealPlan(id)
+      await deleteMealPlan(id.toString())
       // Update local state
       const newHistory = history.filter((_, i) => i !== index)
       setHistory(newHistory)
@@ -59,7 +64,7 @@ export default function MealHistory() {
   const clearHistory = async () => {
     try {
       // Delete all meal plans in history
-      await Promise.all(history.map((plan) => deleteMealPlan(plan.id)))
+      await Promise.all(history.map((plan) => deleteMealPlan(plan.id.toString())))
       setHistory([])
     } catch (error) {
       console.error("Error clearing history:", error)
@@ -110,53 +115,73 @@ export default function MealHistory() {
       </Card>
 
       <div className="grid gap-4">
-        {history.map((mealPlan, index) => (
-          <Card key={index}>
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-lg">Week of {new Date(mealPlan.weekOf).toLocaleDateString()}</CardTitle>
-                  <CardDescription className="flex items-center gap-2 mt-1">
-                    <Calendar className="h-4 w-4" />
-                    Created on {new Date(mealPlan.createdAt).toLocaleDateString()}
-                  </CardDescription>
+        {history.map((historyItem, index) => {
+          const mealPlan = historyItem.meal_plan
+          const weekStart = new Date(mealPlan.weekOf)
+          const weekEnd = new Date(weekStart)
+          weekEnd.setDate(weekStart.getDate() + 6)
+
+          const isCurrent = isCurrentWeek(mealPlan.weekOf)
+          const daysLeft = getDaysUntilExpiry(mealPlan.weekOf)
+          const dateRange = formatDateRange(weekStart, weekEnd)
+
+          return (
+            <Card key={index} className={isCurrent ? "ring-2 ring-orange-500" : ""}>
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      {dateRange}
+                      {isCurrent && <Badge variant="default">Current Week</Badge>}
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-2 mt-1">
+                      <Calendar className="h-4 w-4" />
+                      Created on {new Date(historyItem.created_at).toLocaleDateString()}
+                      {isCurrent && daysLeft > 0 && (
+                        <>
+                          <Clock className="h-4 w-4 ml-2" />
+                          {daysLeft} days left
+                        </>
+                      )}
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={() => reuseMealPlan(historyItem)} variant="outline" size="sm">
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      {isCurrent ? "View Plan" : "Reuse Plan"}
+                    </Button>
+                    <Button onClick={() => handleDeleteMealPlan(historyItem.id, index)} variant="ghost" size="sm">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button onClick={() => reuseMealPlan(mealPlan)} variant="outline" size="sm">
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                    Reuse Plan
-                  </Button>
-                  <Button onClick={() => handleDeleteMealPlan(mealPlan.id, index)} variant="ghost" size="sm">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {Object.entries(mealPlan.meals)
-                  .slice(0, 3)
-                  .map(([day, dayMeals]) => (
-                    <div key={day} className="flex gap-4 text-sm">
-                      <Badge variant="outline" className="min-w-[80px]">
-                        {day}
-                      </Badge>
-                      <div className="flex-1">
-                        <span className="font-medium">{dayMeals.breakfast.name}</span>
-                        <span className="text-gray-500"> • </span>
-                        <span className="font-medium">{dayMeals.lunch.name}</span>
-                        <span className="text-gray-500"> • </span>
-                        <span className="font-medium">{dayMeals.dinner.name}</span>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {Object.entries(mealPlan.meals)
+                    .slice(0, 3)
+                    .map(([day, dayMeals]: [string, any]) => (
+                      <div key={day} className="flex gap-4 text-sm">
+                        <Badge variant="outline" className="min-w-[80px]">
+                          {day}
+                        </Badge>
+                        <div className="flex-1">
+                          <span className="font-medium">{dayMeals.breakfast.name}</span>
+                          <span className="text-gray-500"> • </span>
+                          <span className="font-medium">{dayMeals.lunch.name}</span>
+                          <span className="text-gray-500"> • </span>
+                          <span className="font-medium">{dayMeals.dinner.name}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                {Object.keys(mealPlan.meals).length > 3 && (
-                  <p className="text-sm text-gray-500">+{Object.keys(mealPlan.meals).length - 3} more days...</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                    ))}
+                  {Object.keys(mealPlan.meals).length > 3 && (
+                    <p className="text-sm text-gray-500">+{Object.keys(mealPlan.meals).length - 3} more days...</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
     </div>
   )

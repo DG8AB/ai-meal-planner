@@ -7,9 +7,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Sparkles, X, CheckCircle, AlertCircle } from "lucide-react"
+import { Loader2, Sparkles, X, CheckCircle, AlertCircle, Calendar } from "lucide-react"
 import type { DietaryPreferences, MealPlan } from "@/types/meal-planning"
-import { generateMealPlan } from "@/lib/ai-service"
+import { getSmartWeekRange, formatDateRange } from "@/lib/date-utils"
+import MealGenerationProgress from "@/components/meal-generation-progress"
 
 interface MealPlanGeneratorProps {
   preferences: DietaryPreferences
@@ -22,6 +23,12 @@ export default function MealPlanGenerator({ preferences, onMealPlanGenerated }: 
   const [ingredientInput, setIngredientInput] = useState("")
   const [specialRequests, setSpecialRequests] = useState("")
   const [puterStatus, setPuterStatus] = useState<"loading" | "ready" | "error">("loading")
+  const [weekRange, setWeekRange] = useState(getSmartWeekRange())
+
+  // Update week range when component mounts
+  useEffect(() => {
+    setWeekRange(getSmartWeekRange())
+  }, [])
 
   // Check Puter.js status on component mount
   useEffect(() => {
@@ -82,25 +89,26 @@ export default function MealPlanGenerator({ preferences, onMealPlanGenerated }: 
 
   const handleGeneratePlan = async () => {
     setIsGenerating(true)
-
-    try {
-      console.log("Starting meal plan generation...")
-      const mealPlan = await generateMealPlan({
-        preferences,
-        availableIngredients,
-        specialRequests,
-      })
-      console.log("Meal plan generated successfully!")
-      onMealPlanGenerated(mealPlan)
-    } catch (error) {
-      console.error("Error generating meal plan:", error)
-    } finally {
-      setIsGenerating(false)
-    }
   }
 
   return (
     <div className="space-y-6">
+      {/* Smart Date Range Display */}
+      <Card className="bg-gradient-to-r from-orange-50 to-red-50 border-orange-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-orange-800">
+            <Calendar className="h-5 w-5" />
+            Smart Week Planning
+          </CardTitle>
+          <CardDescription className="text-orange-700">
+            Your meal plan will cover <strong>{formatDateRange(weekRange.startDate, weekRange.endDate)}</strong>
+            <br />
+            Starting from <strong>{weekRange.startDay}</strong> (today) through next{" "}
+            <strong>{weekRange.startDay}</strong>
+          </CardDescription>
+        </CardHeader>
+      </Card>
+
       {/* Puter.js Status Indicator */}
       {puterStatus === "loading" && (
         <Alert>
@@ -190,14 +198,14 @@ export default function MealPlanGenerator({ preferences, onMealPlanGenerated }: 
             <Badge variant="outline">Diet: {preferences.dietType}</Badge>
             <Badge variant="outline">Serving Size: {preferences.servingSize} people</Badge>
             <Badge variant="outline">Budget: {preferences.budgetRange}</Badge>
-            {preferences.allergies.length > 0 &&
-              preferences.allergies.map((allergy) => (
+            {(preferences.allergies ?? []).length > 0 &&
+              (preferences.allergies ?? []).map((allergy) => (
                 <Badge key={allergy} variant="destructive">
                   No {allergy}
                 </Badge>
               ))}
-            {preferences.dislikes.length > 0 &&
-              preferences.dislikes.map((dislike) => (
+            {(preferences.dislikes ?? []).length > 0 &&
+              (preferences.dislikes ?? []).map((dislike) => (
                 <Badge key={dislike} variant="secondary">
                   Avoid {dislike}
                 </Badge>
@@ -207,30 +215,34 @@ export default function MealPlanGenerator({ preferences, onMealPlanGenerated }: 
       </Card>
 
       <div className="text-center">
-        <Button
-          onClick={handleGeneratePlan}
-          disabled={isGenerating}
-          size="lg"
-          className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Creating Your Personalized Meal Plan...
-            </>
-          ) : (
-            <>
+        {isGenerating ? (
+          <MealGenerationProgress
+            preferences={preferences}
+            availableIngredients={availableIngredients}
+            specialRequests={specialRequests}
+            onComplete={onMealPlanGenerated}
+            onError={() => setIsGenerating(false)}
+          />
+        ) : (
+          <>
+            <Button
+              onClick={handleGeneratePlan}
+              disabled={isGenerating}
+              size="lg"
+              className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
+            >
               <Sparkles className="mr-2 h-4 w-4" />
               {puterStatus === "ready" ? "Generate AI Meal Plan" : "Generate Intelligent Meal Plan"}
-            </>
-          )}
-        </Button>
-        <p className="text-sm text-gray-600 mt-2">
-          {puterStatus === "ready"
-            ? "Powered by AI for personalized recommendations"
-            : "Using intelligent algorithms based on your preferences"}
-        </p>
+            </Button>
+            <p className="text-sm text-gray-600 mt-2">
+              {puterStatus === "ready"
+                ? "Powered by AI for personalized recommendations"
+                : "Using intelligent algorithms based on your preferences"}
+            </p>
+          </>
+        )}
       </div>
+      <p className="text-xs text-gray-500 mt-1">Created by dg8ab</p>
     </div>
   )
 }
