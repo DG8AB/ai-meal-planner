@@ -242,7 +242,7 @@ export default function MealPlanGenerator({ preferences, onMealPlanGenerated }: 
           </>
         )}
       </div>
-      <p className="text-xs text-gray-500 mt-1">Created by dg8ab</p>
+      <p className="text-xs text-gray-500 mt-1 text-center">Created by gen</p>
     </div>
   )
 }

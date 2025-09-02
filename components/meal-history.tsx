@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { History, Calendar, RotateCcw, Trash2, Loader2, Clock } from "lucide-react"
 import type { MealPlan } from "@/types/meal-planning"
-import { getMealPlanHistory, deleteMealPlan } from "@/lib/database"
+import { getMealPlanHistory, deleteMealPlan, clearAllData } from "@/lib/local-storage"
 import { isCurrentWeek, getDaysUntilExpiry, formatDateRange } from "@/lib/date-utils"
 
 interface MealHistoryProps {
@@ -63,8 +63,7 @@ export default function MealHistory({ onMealPlanRestore }: MealHistoryProps) {
 
   const clearHistory = async () => {
     try {
-      // Delete all meal plans in history
-      await Promise.all(history.map((plan) => deleteMealPlan(plan.id)))
+      clearAllData()
       setHistory([])
     } catch (error) {
       console.error("Error clearing history:", error)
@@ -104,7 +103,7 @@ export default function MealHistory({ onMealPlanRestore }: MealHistoryProps) {
                 <History className="h-5 w-5" />
                 Meal Plan History
               </CardTitle>
-              <CardDescription>Your previously generated meal plans</CardDescription>
+              <CardDescription>Your previously generated meal plans (stored locally)</CardDescription>
             </div>
             <Button onClick={clearHistory} variant="outline" size="sm">
               <Trash2 className="h-4 w-4 mr-2" />

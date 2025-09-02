@@ -52,7 +52,7 @@ export default function MealGenerationProgress({
   const [showYouTube, setShowYouTube] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
 
-  const fullText = "Created by Dhruv Gowda"
+  const fullText = "Created by gen"
 
   // Initialize steps
   useEffect(() => {
@@ -193,7 +193,7 @@ export default function MealGenerationProgress({
   }
 
   const openYouTube = () => {
-    window.open("https://www.youtube.com/@dhruvex-coding", "_blank")
+    window.open("https://www.youtube.com/@jco_gen", "_blank")
   }
 
   return (
@@ -299,7 +299,7 @@ export default function MealGenerationProgress({
                   className="bg-red-50 border-red-200 hover:bg-red-100 text-red-700"
                 >
                   <Youtube className="h-4 w-4 mr-2" />
-                  Visit dhruvex-coding
+                  Visit @jco_gen
                   <ExternalLink className="h-3 w-3 ml-2" />
                 </Button>
               </div>
